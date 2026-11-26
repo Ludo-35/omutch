@@ -143,7 +143,7 @@ def charger_composition_dataset():
         SELECT 
             UPPER(source) AS Plateforme,
             COUNT(*) AS Annonces,
-            MIN(date_premiere_vue) AS Premiere_collecte,
+            MIN(date_publication) AS Premiere_collecte,
             MAX(date_derniere_vue) AS Derniere_collecte
         FROM annonces
         GROUP BY UPPER(source)
