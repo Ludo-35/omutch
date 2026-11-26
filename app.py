@@ -1,52 +1,101 @@
 import os
-import urllib.parse
 import altair as alt
 import duckdb
 import numpy as np
 import pandas as pd
-import requests
 import streamlit as st
 
-LOGO_PATH = "logo.png"
-DB_PATH = "vehicules.duckdb"
-
-# Configuration de la page
 st.set_page_config(
-    page_title="Omutch • Estimateur Auto",
-    page_icon=LOGO_PATH if os.path.exists(LOGO_PATH) else "🚗",
+    page_title="Omutch — Estimateur Prix VO",
+    page_icon="🚗",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-if os.path.exists(LOGO_PATH):
-    st.logo(LOGO_PATH, size="large")
+DB_PATH = "vehicules.duckdb"
 
-# Style CSS léger pour moderniser les cartes et l'affichage
-st.markdown(
-    """
-    <style>
-    .block-container { padding-top: 1.5rem; padding-bottom: 2rem; }
-    div[data-testid="stMetric"] {
-        background-color: rgba(128, 128, 128, 0.08);
-        border: 1px solid rgba(128, 128, 128, 0.18);
-        padding: 14px 18px;
-        border-radius: 10px;
-    }
-    .highlight-card {
-        background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
-        color: white;
-        padding: 20px 24px;
-        border-radius: 12px;
-        margin-bottom: 1rem;
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
-    }
-    .highlight-card h3 { margin: 0; font-size: 0.95rem; opacity: 0.85; font-weight: 500; }
-    .highlight-card h1 { margin: 4px 0 0 0; font-size: 2.3rem; font-weight: 700; }
-    .highlight-card p { margin: 6px 0 0 0; font-size: 0.85rem; opacity: 0.9; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+DEPARTEMENTS_FRANCE = {
+    "01": "01 - Ain", "02": "02 - Aisne", "03": "03 - Allier", "04": "04 - Alpes-de-Haute-Provence",
+    "05": "05 - Hautes-Alpes", "06": "06 - Alpes-Maritimes", "07": "07 - Ardèche", "08": "08 - Ardennes",
+    "09": "09 - Ariège", "10": "10 - Aube", "11": "11 - Aude", "12": "12 - Aveyron",
+    "13": "13 - Bouches-du-Rhône", "14": "14 - Calvados", "15": "15 - Cantal", "16": "16 - Charente",
+    "17": "17 - Charente-Maritime", "18": "18 - Cher", "19": "19 - Corrèze", "2A": "2A - Corse-du-Sud",
+    "2B": "2B - Haute-Corse", "21": "21 - Côte-d'Or", "22": "22 - Côtes-d'Armor", "23": "23 - Creuse",
+    "24": "24 - Dordogne", "25": "25 - Doubs", "26": "26 - Drôme", "27": "27 - Eure",
+    "28": "28 - Eure-et-Loir", "29": "29 - Finistère", "30": "30 - Gard", "31": "31 - Haute-Garonne",
+    "32": "32 - Gers", "33": "33 - Gironde", "34": "34 - Hérault", "35": "35 - Ille-et-Vilaine",
+    "36": "36 - Indre", "37": "37 - Indre-et-Loire", "38": "38 - Isère", "39": "39 - Jura",
+    "40": "40 - Landes", "41": "41 - Loir-et-Cher", "42": "42 - Loire", "43": "43 - Haute-Loire",
+    "44": "44 - Loire-Atlantique", "45": "45 - Loiret", "46": "46 - Lot", "47": "47 - Lot-et-Garonne",
+    "48": "48 - Lozère", "49": "49 - Maine-et-Loire", "50": "50 - Manche", "51": "51 - Marne",
+    "52": "52 - Haute-Marne", "53": "53 - Mayenne", "54": "54 - Meurthe-et-Moselle", "55": "55 - Meuse",
+    "56": "56 - Morbihan", "57": "57 - Moselle", "58": "58 - Nièvre", "59": "59 - Nord",
+    "60": "60 - Oise", "61": "61 - Orne", "62": "62 - Pas-de-Calais", "63": "63 - Puy-de-Dôme",
+    "64": "64 - Pyrénées-Atlantiques", "65": "65 - Hautes-Pyrénées", "66": "66 - Pyrénées-Orientales",
+    "67": "67 - Bas-Rhin", "68": "68 - Haut-Rhin", "69": "69 - Rhône", "70": "70 - Haute-Saône",
+    "71": "71 - Saône-et-Loire", "72": "72 - Sarthe", "73": "73 - Savoie", "74": "74 - Haute-Savoie",
+    "75": "75 - Paris", "76": "76 - Seine-Maritime", "77": "77 - Seine-et-Marne", "78": "78 - Yvelines",
+    "79": "79 - Deux-Sèvres", "80": "80 - Somme", "81": "81 - Tarn", "82": "82 - Tarn-et-Garonne",
+    "83": "83 - Var", "84": "84 - Vaucluse", "85": "85 - Vendée", "86": "86 - Vienne",
+    "87": "87 - Haute-Vienne", "88": "88 - Vosges", "89": "89 - Yonne", "90": "90 - Territoire de Belfort",
+    "91": "91 - Essonne", "92": "92 - Hauts-de-Seine", "93": "93 - Seine-Saint-Denis",
+    "94": "94 - Val-de-Marne", "95": "95 - Val-d'Oise",
+    "971": "971 - Guadeloupe", "972": "972 - Martinique", "973": "973 - Guyane",
+    "974": "974 - La Réunion", "976": "976 - Mayotte",
+}
+
+ZONES_ATYPIQUES = {
+    "Grandes Métropoles (+200k hab. & périphérie)": {
+        "75", "92", "93", "94", "69", "13", "31", "06", "44", "34", "67", "33", "59", "35"
+    },
+    "Montagne (Alpes, Pyrénées, Jura, Massif Central)": {
+        "04", "05", "09", "15", "25", "38", "39", "43", "48", "63", "64", "65", "66", "73", "74"
+    },
+    "Côte Atlantique & Manche": {
+        "14", "17", "22", "29", "33", "40", "44", "50", "56", "64", "76", "85"
+    },
+    "Côtes Méditerranéennes & Corse": {
+        "06", "11", "13", "2A", "2B", "30", "34", "66", "83"
+    },
+    "Zones Frontalières (Suisse, Luxembourg, Allemagne, Belgique, Espagne)": {
+        "01", "08", "25", "39", "54", "57", "59", "62", "64", "65", "66", "67", "68", "74", "90"
+    },
+    "DOM-TOM (Outre-Mer)": {
+        "971", "972", "973", "974", "976"
+    },
+}
+
+
+def extraire_code_dept(cp: str) -> str:
+    if not cp or cp == "00000":
+        return ""
+    cp = str(cp).strip().upper()
+    if cp.startswith(("2A", "2B")):
+        return cp[:2]
+    if cp.startswith("97") and len(cp) >= 3:
+        return cp[:3]
+    if len(cp) >= 2 and cp[:2].isdigit():
+        return cp[:2]
+    return ""
+
+
+def classifier_zone_atypique(cp: str) -> str:
+    dept = extraire_code_dept(cp)
+    if not dept:
+        return "Non renseigné"
+    if dept in ZONES_ATYPIQUES["DOM-TOM (Outre-Mer)"]:
+        return "DOM-TOM (Outre-Mer)"
+    if dept in ZONES_ATYPIQUES["Montagne (Alpes, Pyrénées, Jura, Massif Central)"]:
+        return "Montagne"
+    if dept in ZONES_ATYPIQUES["Grandes Métropoles (+200k hab. & périphérie)"]:
+        return "Grandes Métropoles (+200k)"
+    if dept in ZONES_ATYPIQUES["Côtes Méditerranéennes & Corse"]:
+        return "Côtes Méditerranéennes"
+    if dept in ZONES_ATYPIQUES["Côte Atlantique & Manche"]:
+        return "Côte Atlantique"
+    if dept in ZONES_ATYPIQUES["Zones Frontalières (Suisse, Luxembourg, Allemagne, Belgique, Espagne)"]:
+        return "Zones Frontalières"
+    return "Campagne / Rural"
 
 
 def get_connection():
@@ -54,64 +103,161 @@ def get_connection():
 
 
 @st.cache_data(ttl=60)
-def charger_referentiels():
-    """Charge les listes de filtres et compteurs globaux (mis en cache 60s)."""
+def charger_filtres_initiaux():
     con = get_connection()
-    total = con.execute("SELECT COUNT(*) FROM annonces").fetchone()[0]
-
     marques = [
         r[0]
         for r in con.execute(
             """
-            SELECT DISTINCT marque FROM vehicules 
-            WHERE marque IS NOT NULL AND marque != 'INCONNU' 
+            SELECT DISTINCT marque FROM vehicules
+            WHERE marque IS NOT NULL AND marque != 'INCONNU'
             ORDER BY marque
             """
         ).fetchall()
     ]
-
-    energies = [
-        r[0].capitalize()
+    sources = [
+        r[0]
         for r in con.execute(
-            """
-            SELECT DISTINCT energie FROM vehicules 
-            WHERE energie IS NOT NULL AND energie != 'inconnu' 
-            ORDER BY energie
-            """
+            "SELECT DISTINCT source FROM annonces WHERE source IS NOT NULL ORDER BY source"
         ).fetchall()
     ]
-
-    boites = [
-        r[0].capitalize()
+    depts_raw = [
+        r[0]
         for r in con.execute(
-            """
-            SELECT DISTINCT boite_vitesse FROM vehicules 
-            WHERE boite_vitesse IS NOT NULL AND boite_vitesse != 'inconnu' 
-            ORDER BY boite_vitesse
-            """
+            "SELECT DISTINCT code_postal FROM vehicules WHERE code_postal IS NOT NULL AND code_postal != '00000'"
         ).fetchall()
     ]
-
+    total_annonces = con.execute("SELECT COUNT(*) FROM annonces").fetchone()[0]
     con.close()
-    return total, marques, energies, boites
+
+    depts_presents = sorted({extraire_code_dept(cp) for cp in depts_raw if extraire_code_dept(cp)})
+    return marques, sources, depts_presents, total_annonces
 
 
 @st.cache_data(ttl=60)
-def charger_modeles(marque: str):
+def charger_composition_dataset():
+    """Charge les statistiques globales de composition de la base de données."""
     con = get_connection()
-    modeles = [
-        r[0]
-        for r in con.execute(
-            """
-            SELECT DISTINCT modele FROM vehicules 
-            WHERE UPPER(marque) = UPPER(?) AND modele IS NOT NULL AND modele != 'INCONNU' 
-            ORDER BY modele
-            """,
-            [marque],
-        ).fetchall()
-    ]
+    df_sources = con.execute(
+        """
+        SELECT 
+            UPPER(source) AS Plateforme,
+            COUNT(*) AS Annonces,
+            MIN(date_premiere_vue) AS Premiere_collecte,
+            MAX(date_derniere_vue) AS Derniere_collecte
+        FROM annonces
+        GROUP BY UPPER(source)
+        ORDER BY Annonces DESC
+        """
+    ).df()
+
+    df_energies = con.execute(
+        """
+        SELECT 
+            COALESCE(NULLIF(LOWER(v.energie), ''), 'inconnu') AS Energie,
+            COUNT(*) AS Annonces
+        FROM annonces a
+        JOIN vehicules v ON a.id_vehicule = v.id_vehicule
+        GROUP BY 1
+        ORDER BY Annonces DESC
+        """
+    ).df()
+
+    df_boites = con.execute(
+        """
+        SELECT 
+            COALESCE(NULLIF(LOWER(v.boite_vitesse), ''), 'inconnu') AS Boite,
+            COUNT(*) AS Annonces
+        FROM annonces a
+        JOIN vehicules v ON a.id_vehicule = v.id_vehicule
+        GROUP BY 1
+        ORDER BY Annonces DESC
+        """
+    ).df()
+
+    df_annees = con.execute(
+        """
+        SELECT 
+            v.annee_mise_circulation AS Annee,
+            a.source AS Source,
+            COUNT(*) AS Annonces
+        FROM annonces a
+        JOIN vehicules v ON a.id_vehicule = v.id_vehicule
+        WHERE v.annee_mise_circulation BETWEEN 2005 AND 2026
+        GROUP BY 1, 2
+        ORDER BY 1
+        """
+    ).df()
+
+    df_top_marques = con.execute(
+        """
+        SELECT v.marque AS Marque, COUNT(*) AS Annonces
+        FROM annonces a
+        JOIN vehicules v ON a.id_vehicule = v.id_vehicule
+        WHERE v.marque IS NOT NULL AND v.marque != 'INCONNU'
+        GROUP BY v.marque
+        ORDER BY Annonces DESC
+        LIMIT 30
+        """
+    ).df()
+
+    nb_vehicules = con.execute("SELECT COUNT(*) FROM vehicules").fetchone()[0]
+    nb_releves = con.execute("SELECT COUNT(*) FROM historique_prix").fetchone()[0]
     con.close()
-    return modeles
+
+    return df_sources, df_energies, df_boites, df_annees, df_top_marques, nb_vehicules, nb_releves
+
+
+@st.cache_data(ttl=60)
+def charger_options_marque(marque):
+    con = get_connection()
+    if marque == "Toutes":
+        modeles = [
+            r[0]
+            for r in con.execute(
+                "SELECT DISTINCT modele FROM vehicules WHERE modele IS NOT NULL AND modele != 'INCONNU' ORDER BY modele"
+            ).fetchall()
+        ]
+        energies = [
+            r[0]
+            for r in con.execute(
+                "SELECT DISTINCT energie FROM vehicules WHERE energie IS NOT NULL ORDER BY energie"
+            ).fetchall()
+        ]
+        boites = [
+            r[0]
+            for r in con.execute(
+                "SELECT DISTINCT boite_vitesse FROM vehicules WHERE boite_vitesse IS NOT NULL ORDER BY boite_vitesse"
+            ).fetchall()
+        ]
+    else:
+        modeles = [
+            r[0]
+            for r in con.execute(
+                """
+                SELECT DISTINCT modele FROM vehicules
+                WHERE UPPER(marque) = UPPER(?) AND modele IS NOT NULL AND modele != 'INCONNU'
+                ORDER BY modele
+                """,
+                [marque],
+            ).fetchall()
+        ]
+        energies = [
+            r[0]
+            for r in con.execute(
+                "SELECT DISTINCT energie FROM vehicules WHERE UPPER(marque) = UPPER(?) AND energie IS NOT NULL ORDER BY energie",
+                [marque],
+            ).fetchall()
+        ]
+        boites = [
+            r[0]
+            for r in con.execute(
+                "SELECT DISTINCT boite_vitesse FROM vehicules WHERE UPPER(marque) = UPPER(?) AND boite_vitesse IS NOT NULL ORDER BY boite_vitesse",
+                [marque],
+            ).fetchall()
+        ]
+    con.close()
+    return modeles, energies, boites
 
 
 @st.cache_data(ttl=30)
@@ -188,450 +334,368 @@ def rechercher_comparables(
 
     df = con.execute(query, params).df()
     con.close()
+
+    if not df.empty:
+        df["dept"] = df["code_postal"].apply(extraire_code_dept)
+        df["zone_atypique"] = df["code_postal"].apply(classifier_zone_atypique)
     return df
 
 
-@st.cache_data(ttl=86400, show_spinner=False)
-def recuperer_photos_generations(
-    marque: str, modele: str, annees_cibles: list[int]
-) -> list[dict]:
-    """Récupère les photos Wikimedia Commons correspondant aux années/générations du véhicule."""
-    if not marque or marque == "Toutes":
-        return []
-
-    modele_clean = "" if modele == "Tous" else modele
-    annees_uniques = sorted(set(a for a in annees_cibles if a and 1980 <= a <= 2026))
-    if not annees_uniques:
-        annees_uniques = [None]
-
-    headers = {"User-Agent": "OmutchAutoApp/1.0 (contact@omutch.local)"}
-    photos = []
-    urls_vues = set()
-
-    for an in annees_uniques:
-        terme = f"{marque} {modele_clean} {an if an else ''}".strip()
-        try:
-            resp = requests.get(
-                "https://commons.wikimedia.org/w/api.php",
-                params={
-                    "action": "query",
-                    "generator": "search",
-                    "gsrsearch": f"filetype:bitmap {terme}",
-                    "gsrnamespace": 6,
-                    "gsrlimit": 4,
-                    "prop": "imageinfo",
-                    "iiprop": "url",
-                    "iiurlwidth": 480,
-                    "format": "json",
-                },
-                headers=headers,
-                timeout=4,
-            )
-            pages = resp.json().get("query", {}).get("pages", {})
-            for page_data in pages.values():
-                titre_fichier = page_data.get("title", "").lower()
-                if any(
-                    mot in titre_fichier
-                    for mot in [
-                        "logo",
-                        "badge",
-                        "emblem",
-                        "interior",
-                        "dashboard",
-                        "engine",
-                        "diagram",
-                    ]
-                ):
-                    continue
-                ii = page_data.get("imageinfo", [{}])[0]
-                thumb_url = ii.get("thumburl") or ii.get("url")
-                if thumb_url and thumb_url not in urls_vues:
-                    urls_vues.add(thumb_url)
-                    legende = f"{marque} {modele_clean}".strip() + (
-                        f" ({an})" if an else ""
-                    )
-                    photos.append({"url": thumb_url, "legende": legende})
-                    break
-        except Exception:
-            continue
-
-    return photos
-
-
 # --- EN-TÊTE ---
-col_logo, col_title, col_refresh = st.columns(
-    [1.2, 4.8, 1], vertical_alignment="center"
-)
+col_logo, col_title = st.columns([1, 5])
 with col_logo:
-    if os.path.exists(LOGO_PATH):
-        st.image(LOGO_PATH, width=160)
+    if os.path.exists("logo.png"):
+        st.image("logo.png", width=110)
 with col_title:
-    st.title("Cockpit d'Estimation Véhicule")
-with col_refresh:
-    if st.button(
-        "🔄 Actualiser",
-        use_container_width=True,
-        help="Recharger les dernières annonces scrappées",
-    ):
-        st.cache_data.clear()
-        st.rerun()
+    st.title("Omutch — Estimateur de prix véhicules d'occasion")
+    st.caption("Analyse statistique et comparables en temps réel du marché français")
 
-# Chargement des référentiels
-try:
-    total_annonces, marques_dispo, energies_dispo, boites_dispo = charger_referentiels()
-except Exception as e:
-    st.error(f"Impossible de lire la base de données (`{DB_PATH}`) : {e}")
-    st.stop()
+marques_dispo, sources_dispo, depts_dispo, total_base = charger_filtres_initiaux()
 
-# --- BARRE LATÉRALE (FILTRES) ---
-st.sidebar.metric("📊 Annonces en base", f"{total_annonces:,}")
-st.sidebar.markdown("---")
-st.sidebar.subheader("1. Véhicule à évaluer")
+# --- BARRE LATÉRALE ---
+st.sidebar.header("🔍 Critères du véhicule")
+st.sidebar.metric("Annonces en base", f"{total_base:,}".replace(",", " "))
 
-selected_marque = st.sidebar.selectbox("Marque", options=["Toutes"] + marques_dispo)
+selected_marque = st.sidebar.selectbox("Marque", ["Toutes"] + marques_dispo)
+modeles_dispo, energies_dispo, boites_dispo = charger_options_marque(selected_marque)
 
-if selected_marque != "Toutes":
-    modeles_dispo = ["Tous"] + charger_modeles(selected_marque)
-else:
-    modeles_dispo = ["Tous"]
-selected_modele = st.sidebar.selectbox("Modèle", options=modeles_dispo)
+selected_modele = st.sidebar.selectbox("Modèle", ["Tous"] + modeles_dispo)
+selected_energie = st.sidebar.selectbox("Énergie", ["Tous"] + energies_dispo)
+selected_boite = st.sidebar.selectbox("Boîte de vitesse", ["Toutes"] + boites_dispo)
 
-col_sb1, col_sb2 = st.sidebar.columns(2)
-with col_sb1:
-    selected_energie = st.selectbox("Énergie", options=["Tous"] + energies_dispo)
-with col_sb2:
-    selected_boite = st.selectbox("Boîte", options=["Toutes"] + boites_dispo)
-
-selected_source = st.sidebar.selectbox(
-    "Source des annonces", options=["Toutes", "Lacentrale", "Leboncoin"]
-)
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("2. Ajustements (Optionnels)")
-
-filtrer_annee = st.sidebar.toggle("Filtrer par année", value=False)
+# Année optionnelle
+filtrer_annee = st.sidebar.checkbox("Filtrer par année", value=False)
 if filtrer_annee:
-    annee = st.sidebar.number_input("Année", 1995, 2026, 2019)
-    marge_annee = st.sidebar.slider("Tolérance (± ans)", 0, 5, 1)
-    annee_min, annee_max = annee - marge_annee, annee + marge_annee
+    col_a1, col_a2 = st.sidebar.columns(2)
+    with col_a1:
+        annee_cible = st.number_input("Année", min_value=1990, max_value=2026, value=2020, step=1)
+    with col_a2:
+        tolerance_annee = st.selectbox("Tolérance", [0, 1, 2, 3, 5], index=1, format_func=lambda x: f"± {x} an(s)")
+    annee_min_query = annee_cible - tolerance_annee
+    annee_max_query = annee_cible + tolerance_annee
 else:
-    annee, annee_min, annee_max = None, None, None
+    annee_min_query = None
+    annee_max_query = None
 
-ajuster_km = st.sidebar.toggle("Ajuster selon le kilométrage", value=False)
+# Kilométrage optionnel
+ajuster_km = st.sidebar.checkbox("Ajuster à un kilométrage précis", value=False)
 if ajuster_km:
-    kilometrage = st.sidebar.number_input(
-        "Kilométrage actuel (km)", 0, 450000, 110000, step=5000
+    kilometrage_cible = st.sidebar.number_input(
+        "Kilométrage cible (km)", min_value=0, max_value=400000, value=85000, step=5000
     )
 else:
-    kilometrage = None
+    kilometrage_cible = None
 
-exclure_outliers = st.sidebar.toggle("Écarter les prix aberrants", value=True)
-inclure_vendus = st.sidebar.toggle("Inclure les véhicules vendus", value=False)
+st.sidebar.markdown("---")
+st.sidebar.subheader("📍 Segmentation géographique")
 
-# --- EXÉCUTION DE LA RECHERCHE ---
-df = rechercher_comparables(
+mode_geo = st.sidebar.radio(
+    "Découpage territorial",
+    [
+        "France entière",
+        "Par Département",
+        "Par Zonage Atypique",
+        "Par Ville / Code Postal",
+    ],
+)
+
+dept_choisi = None
+zone_atypique_choisie = None
+recherche_libre_geo = ""
+
+if mode_geo == "Par Département":
+    options_depts = [
+        DEPARTEMENTS_FRANCE.get(d, f"{d} - Département {d}") for d in depts_dispo
+    ]
+    dept_label = st.sidebar.selectbox("Sélectionner un département", options_depts)
+    if dept_label:
+        dept_choisi = dept_label.split(" - ")[0].strip()
+
+elif mode_geo == "Par Zonage Atypique":
+    liste_zones_filtre = [
+        "Grandes Métropoles (+200k)",
+        "Montagne",
+        "Côte Atlantique",
+        "Côtes Méditerranéennes",
+        "Zones Frontalières",
+        "Campagne / Rural",
+        "DOM-TOM (Outre-Mer)",
+    ]
+    zone_atypique_choisie = st.sidebar.selectbox("Typologie de zone", liste_zones_filtre)
+
+elif mode_geo == "Par Ville / Code Postal":
+    recherche_libre_geo = st.sidebar.text_input(
+        "Ville ou Code Postal", placeholder="Ex: Rennes, 35, 74000, Annecy..."
+    )
+
+st.sidebar.markdown("---")
+st.sidebar.subheader("⚙️ Paramètres avancés")
+selected_source = st.sidebar.selectbox("Plateforme source", ["Toutes"] + sources_dispo)
+filtrer_outliers = st.sidebar.checkbox("Exclure les prix extrêmes (IQR)", value=True)
+inclure_vendus = st.sidebar.checkbox("Inclure les annonces retirées/vendues", value=False)
+
+# --- CHARGEMENT & FILTRAGE DES DONNÉES ---
+df_brut = rechercher_comparables(
     selected_marque,
     selected_modele,
     selected_energie,
     selected_boite,
     selected_source,
-    annee_min,
-    annee_max,
+    annee_min_query,
+    annee_max_query,
     inclure_vendus,
 )
 
+df_france = df_brut.copy()
+
+df = df_brut.copy()
+if not df.empty:
+    if mode_geo == "Par Département" and dept_choisi:
+        df = df[df["dept"] == dept_choisi]
+    elif mode_geo == "Par Zonage Atypique" and zone_atypique_choisie:
+        df = df[df["zone_atypique"] == zone_atypique_choisie]
+    elif mode_geo == "Par Ville / Code Postal" and recherche_libre_geo.strip():
+        terme = recherche_libre_geo.strip()
+        if terme.isdigit():
+            df = df[df["code_postal"].astype(str).str.startswith(terme)]
+        else:
+            df = df[df["ville"].fillna("").str.contains(terme, case=False, na=False)]
+
+if filtrer_outliers and len(df) >= 8:
+    q1 = df["prix"].quantile(0.25)
+    q3 = df["prix"].quantile(0.75)
+    iqr = q3 - q1
+    df = df[(df["prix"] >= q1 - 1.5 * iqr) & (df["prix"] <= q3 + 1.5 * iqr)]
+
 # --- ONGLETS PRINCIPAUX ---
-tab_est, tab_analyse, tab_db = st.tabs(
-    ["🎯 Estimateur & Comparables", "📈 Analyse du Marché", "🗄️ État de la Base"]
+tab_estim, tab_marche, tab_liste = st.tabs(
+    ["💰 Estimation & Cote", "📊 Analyse du Marché & Dataset", "📋 Annonces Comparables"]
 )
 
-# ==============================================================================
-# ONGLET 1 : ESTIMATEUR
-# ==============================================================================
-with tab_est:
+with tab_estim:
     if df.empty:
-        st.info(
-            "Aucune annonce ne correspond exactement à ces critères. Élargis la tolérance d'année ou repasse un filtre sur « Tous »."
-        )
+        st.warning("Aucune annonce comparable trouvée avec ces critères. Élargissez vos filtres ou la zone géographique.")
     else:
-        nb_brut = len(df)
-        if exclure_outliers and nb_brut >= 10:
-            q1, q3 = df["prix"].quantile(0.25), df["prix"].quantile(0.75)
-            iqr = q3 - q1
-            df = df[
-                (df["prix"] >= max(500, q1 - 1.5 * iqr))
-                & (df["prix"] <= q3 + 1.5 * iqr)
-            ].copy()
-        else:
-            df = df.copy()
-
-        nb_final = len(df)
-        ecartes = nb_brut - nb_final
-
-        prix_min = df["prix"].min()
-        prix_max = df["prix"].max()
-        prix_moyen = df["prix"].mean()
         prix_median = df["prix"].median()
-        prix_p25 = df["prix"].quantile(0.25)
-        prix_p75 = df["prix"].quantile(0.75)
+        prix_bas = df["prix"].quantile(0.25)
+        prix_haut = df["prix"].quantile(0.75)
+        km_moyen = df["kilometrage"].mean()
+        nb_fmt = f"{len(df):,}".replace(",", " ")
 
-        decote_par_km = 0.04
-        methode_decote = "forfait standard 0,04 €/km"
-        if ajuster_km and kilometrage is not None:
+        if ajuster_km and kilometrage_cible is not None:
+            decote_par_km = 0.08
+            methode_decote = "standard : -80 € / 1 000 km"
             if len(df) >= 10 and df["kilometrage"].std() > 5000:
                 pente, _ = np.polyfit(df["kilometrage"], df["prix"], 1)
                 if -0.25 <= pente <= -0.01:
                     decote_par_km = abs(pente)
-                    methode_decote = f"tendance marché {decote_par_km:.3f} €/km"
-            km_moyen = df["kilometrage"].mean()
-            prix_conseille = max(
-                500, prix_median - (kilometrage - km_moyen) * decote_par_km
+                    methode_decote = f"tendance marché : -{decote_par_km * 1000:,.0f} € / 1 000 km".replace(",", " ")
+
+            prix_conseille = max(500, prix_median - (kilometrage_cible - km_moyen) * decote_par_km)
+            ratio_ajuste = prix_conseille / prix_median if prix_median > 0 else 1.0
+            prix_bas_affiche = max(500, prix_bas * ratio_ajuste)
+            prix_haut_affiche = max(500, prix_haut * ratio_ajuste)
+
+            km_fmt = f"{kilometrage_cible:,}".replace(",", " ")
+            st.info(
+                f"**Prix conseillé ajusté à {km_fmt} km** ({methode_decote}) • Basé sur **{nb_fmt} annonces uniques**"
             )
-            sous_titre_carte = f"Médiane ajustée à {kilometrage:,} km ({methode_decote}) • Basé sur {nb_final:,} annonces"
+            label_median = "🎯 Prix médian ajusté"
         else:
             prix_conseille = prix_median
-            sous_titre_carte = f"Prix médian du marché • Basé sur {nb_final:,} annonces" + (
-                f" ({ecartes} extrêmes écartés)" if ecartes > 0 else ""
+            prix_bas_affiche = prix_bas
+            prix_haut_affiche = prix_haut
+            st.info(
+                f"**Cote globale du marché** (toutes années/kilométrages sélectionnés) • Basé sur **{nb_fmt} annonces uniques**"
             )
+            label_median = "🎯 Prix médian du marché"
 
-        titre_vehicule = f"{selected_marque if selected_marque != 'Toutes' else 'Toutes marques'} {selected_modele if selected_modele != 'Tous' else ''}".strip()
-        st.markdown(
-            f"""
-            <div class="highlight-card">
-                <h3>ESTIMATION CONSEILLÉE • {titre_vehicule.upper()}</h3>
-                <h1>{prix_conseille:,.0f} €</h1>
-                <p>{sous_titre_carte}</p>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        # Galerie des générations & liens presse/vidéo dès qu'une marque est choisie
-        if selected_marque != "Toutes":
-            annees_valides = df[df["annee"] > 1980]["annee"]
-            if filtrer_annee and annee_min is not None and annee_max is not None:
-                cibles_annees = (
-                    [annee_min, annee_max] if annee_min != annee_max else [annee_min]
-                )
-            elif not annees_valides.empty:
-                an_min_df, an_max_df = int(annees_valides.min()), int(
-                    annees_valides.max()
-                )
-                cibles_annees = (
-                    [an_min_df, an_max_df]
-                    if (an_max_df - an_min_df) >= 4
-                    else [int(annees_valides.median())]
-                )
-            else:
-                cibles_annees = []
-
-            photos_gen = recuperer_photos_generations(
-                selected_marque, selected_modele, cibles_annees
-            )
-            if photos_gen:
-                cols_img = st.columns(min(len(photos_gen), 3))
-                for idx_p, photo in enumerate(photos_gen[:3]):
-                    with cols_img[idx_p]:
-                        st.image(
-                            photo["url"],
-                            caption=photo["legende"],
-                            use_container_width=True,
-                        )
-
-            requete_recherche = f"{selected_marque} {selected_modele if selected_modele != 'Tous' else ''} {annee if annee else ''}".strip()
-            q_enc = urllib.parse.quote_plus(requete_recherche)
-            col_l1, col_l2, col_l3 = st.columns(3)
-            with col_l1:
-                st.link_button(
-                    "🎬 Essais vidéo YouTube",
-                    f"https://www.youtube.com/results?search_query=essai+{q_enc}",
-                    use_container_width=True,
-                )
-            with col_l2:
-                st.link_button(
-                    "📰 Essai presse Caradisiac",
-                    f"https://www.google.com/search?q=site:caradisiac.com+essai+{q_enc}",
-                    use_container_width=True,
-                )
-            with col_l3:
-                st.link_button(
-                    "🔧 Fiche fiabilité & Avis",
-                    f"https://www.google.com/search?q=fiabilite+avis+{q_enc}",
-                    use_container_width=True,
-                )
-
-        # Indicateurs secondaires
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric(
-            "🔴 Vente rapide (P25)",
-            f"{prix_p25:,.0f} €",
-            help="25% des annonces sont sous ce prix",
-        )
-        c2.metric("📊 Prix moyen", f"{prix_moyen:,.0f} €")
-        c3.metric(
-            "🟢 Prix fort (P75)",
-            f"{prix_p75:,.0f} €",
-            help="75% des annonces sont sous ce prix",
-        )
-        c4.metric(
-            "↔️ Extrêmes (Min / Max)", f"{prix_min:,.0f} € – {prix_max:,.0f} €"
-        )
+        c1.metric("Fourchette basse (Q1 - 25%)", f"{prix_bas_affiche:,.0f} €".replace(",", " "))
+        c2.metric(label_median, f"{prix_conseille:,.0f} €".replace(",", " "))
+        c3.metric("Fourchette haute (Q3 - 75%)", f"{prix_haut_affiche:,.0f} €".replace(",", " "))
+        c4.metric("Kilométrage moyen constaté", f"{km_moyen:,.0f} km".replace(",", " "))
 
-        st.markdown("---")
-
-        if ajuster_km and kilometrage is not None:
-            df["ecart_km"] = (df["kilometrage"] - kilometrage).abs()
-            if filtrer_annee and annee is not None:
-                df["score_proximite"] = (
-                    df["ecart_km"] + (df["annee"] - annee).abs() * 15000
+        st.subheader("📉 Décote kilométrique des véhicules comparables")
+        echantillon_graph = df.sample(min(len(df), 1500), random_state=42)
+        scatter = (
+            alt.Chart(echantillon_graph)
+            .mark_circle(size=55, opacity=0.55)
+            .encode(
+                x=alt.X("kilometrage:Q", title="Kilométrage (km)"),
+                y=alt.Y("prix:Q", title="Prix affiché (€)"),
+                color=alt.Color("source:N", title="Source"),
+                tooltip=["marque", "modele", "annee", "kilometrage", "prix", "ville", "code_postal", "source"],
+            )
+        )
+        if ajuster_km and kilometrage_cible is not None:
+            point_cible = (
+                alt.Chart(pd.DataFrame({"kilometrage": [kilometrage_cible], "prix": [prix_conseille]}))
+                .mark_point(color="red", size=220, filled=True, shape="diamond")
+                .encode(
+                    x="kilometrage:Q",
+                    y="prix:Q",
+                    tooltip=[alt.Tooltip("prix:Q", title="Estimation (€)", format=",.0f")],
                 )
-            else:
-                df["score_proximite"] = df["ecart_km"]
-            df_affiche = df.sort_values("score_proximite").drop(
-                columns=["ecart_km", "score_proximite"]
             )
-            label_tri = "triées par proximité avec ton véhicule"
+            st.altair_chart(scatter + point_cible, use_container_width=True)
         else:
-            df_affiche = df.sort_values("prix")
-            label_tri = "triées par prix croissant"
+            st.altair_chart(scatter, use_container_width=True)
 
-        col_tbl_title, col_export = st.columns([4, 1])
-        with col_tbl_title:
-            st.subheader(
-                f"📋 Annonces comparables ({nb_final:,} résultats, {label_tri})"
+with tab_marche:
+    # 1. Comparatif par Zonage Atypique sur la sélection active
+    st.subheader("🗺️ Comparatif des prix médians par Zonage Atypique (France entière)")
+    df_zones = df_france[df_france["zone_atypique"] != "Non renseigné"].copy()
+    if len(df_zones) >= 5:
+        stats_zones = (
+            df_zones.groupby("zone_atypique", as_index=False)
+            .agg(
+                Prix_Median=("prix", "median"),
+                Km_Moyen=("kilometrage", "mean"),
+                Annonces=("prix", "count"),
             )
-        with col_export:
-            csv_data = df_affiche.to_csv(index=False, sep=";").encode("utf-8-sig")
-            st.download_button(
-                "📥 Exporter CSV",
-                data=csv_data,
-                file_name=f"comparables_{selected_marque.lower()}.csv",
-                mime="text/csv",
-                use_container_width=True,
-            )
-
-        st.dataframe(
-            df_affiche,
-            column_config={
-                "url_annonce": st.column_config.LinkColumn(
-                    "Annonce", display_text="Ouvrir ↗"
-                ),
-                "source": st.column_config.TextColumn("Source"),
-                "statut": st.column_config.TextColumn("Statut"),
-                "marque": "Marque",
-                "modele": "Modèle",
-                "energie": "Énergie",
-                "boite": "Boîte",
-                "annee": st.column_config.NumberColumn("Année", format="%d"),
-                "kilometrage": st.column_config.NumberColumn(
-                    "Kilométrage", format="%d km"
-                ),
-                "prix": st.column_config.NumberColumn("Prix", format="%.0f €"),
-                "code_postal": "CP",
-                "ville": "Ville",
-                "date_releve": st.column_config.DatetimeColumn(
-                    "Relevé le", format="DD/MM/YYYY"
-                ),
-            },
-            use_container_width=True,
-            hide_index=True,
+            .sort_values("Prix_Median", ascending=False)
         )
-
-# ==============================================================================
-# ONGLET 2 : ANALYSE DU MARCHÉ
-# ==============================================================================
-with tab_analyse:
-    if df.empty:
-        st.info(
-            "Sélectionne des critères avec des résultats pour afficher les graphiques d'analyse."
+        chart_zones = (
+            alt.Chart(stats_zones)
+            .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
+            .encode(
+                x=alt.X("zone_atypique:N", sort="-y", title="Zone typologique"),
+                y=alt.Y("Prix_Median:Q", title="Prix médian (€)"),
+                color=alt.Color("zone_atypique:N", legend=None),
+                tooltip=[
+                    alt.Tooltip("zone_atypique:N", title="Zone"),
+                    alt.Tooltip("Prix_Median:Q", title="Prix médian (€)", format=",.0f"),
+                    alt.Tooltip("Km_Moyen:Q", title="Km moyen", format=",.0f"),
+                    alt.Tooltip("Annonces:Q", title="Nb annonces"),
+                ],
+            )
+        )
+        st.altair_chart(chart_zones, use_container_width=True)
+        st.dataframe(
+            stats_zones.rename(
+                columns={
+                    "zone_atypique": "Zone atypique",
+                    "Prix_Median": "Prix médian (€)",
+                    "Km_Moyen": "Kilométrage moyen",
+                    "Annonces": "Nombre d'annonces",
+                }
+            ),
+            hide_index=True,
+            use_container_width=True,
         )
     else:
-        col_g1, col_g2 = st.columns(2)
-        with col_g1:
-            st.subheader("📉 Décote Prix vs Kilométrage")
-            st.scatter_chart(df, x="kilometrage", y="prix", color="source")
+        st.info("Pas assez d'annonces géolocalisées sur cette sélection pour comparer les zones atypiques.")
 
-        with col_g2:
-            st.subheader("🏷️ Comparaison La Centrale vs Leboncoin")
-            comp_source = (
-                df.groupby("source")
-                .agg(
-                    Annonces=("prix", "count"),
-                    Prix_Moyen=("prix", "mean"),
-                    Prix_Median=("prix", "median"),
-                    Km_Moyen=("kilometrage", "mean"),
-                )
-                .reset_index()
-            )
-            st.dataframe(
-                comp_source,
-                column_config={
-                    "source": "Plateforme",
-                    "Annonces": st.column_config.NumberColumn("Nb annonces", format="%d"),
-                    "Prix_Moyen": st.column_config.NumberColumn(
-                        "Prix moyen", format="%.0f €"
-                    ),
-                    "Prix_Median": st.column_config.NumberColumn(
-                        "Prix médian", format="%.0f €"
-                    ),
-                    "Km_Moyen": st.column_config.NumberColumn(
-                        "Km moyen", format="%.0f km"
-                    ),
-                },
-                use_container_width=True,
-                hide_index=True,
-            )
+    st.markdown("---")
 
-            st.subheader("⛽ Prix médian par carburant")
-            comp_energie = (
-                df.groupby("energie")["prix"].median().sort_values(ascending=False)
-            )
-            st.bar_chart(comp_energie)
+    # 2. Composition globale du dataset
+    st.subheader("🗄️ Composition globale du dataset Omutch")
+    (
+        df_sources,
+        df_energies,
+        df_boites,
+        df_annees,
+        df_top_marques,
+        nb_vehicules,
+        nb_releves,
+    ) = charger_composition_dataset()
 
-# ==============================================================================
-# ONGLET 3 : ÉTAT DE LA BASE
-# ==============================================================================
-with tab_db:
-    con_db = get_connection()
-    df_sources = con_db.execute(
-        """
-        SELECT 
-            source AS Plateforme,
-            statut AS Statut,
-            COUNT(*) AS Annonces,
-            MIN(date_publication) AS Premiere_Collecte,
-            MAX(date_derniere_vue) AS Derniere_Collecte
-        FROM annonces
-        GROUP BY source, statut
-        ORDER BY Annonces DESC
-        """
-    ).df()
+    k1, k2, k3 = st.columns(3)
+    k1.metric("Annonces uniques suivies", f"{total_base:,}".replace(",", " "))
+    k2.metric("Véhicules physiques dédupliqués", f"{nb_vehicules:,}".replace(",", " "))
+    k3.metric("Relevés de prix historisés", f"{nb_releves:,}".replace(",", " "))
 
-    df_top = con_db.execute(
-        """
-        SELECT marque AS Marque, COUNT(*) AS Vehicules
-        FROM vehicules
-        WHERE marque IS NOT NULL AND marque != 'INCONNU'
-        GROUP BY marque
-        ORDER BY Vehicules DESC
-        LIMIT 30
-        """
-    ).df()
-    con_db.close()
-
-    col_d1, col_d2 = st.columns(2)
+    col_d1, col_d2, col_d3 = st.columns(3)
     with col_d1:
-        st.subheader("📦 Volume par source et statut")
-        st.dataframe(df_sources, use_container_width=True, hide_index=True)
-    with col_d2:
-        st.subheader("🏆 Top 30 des marques en base (par volume)")
-        chart_top = (
-            alt.Chart(df_top)
-            .mark_bar(color="#2563eb")
-            .encode(
-                x=alt.X("Marque:N", sort="-y", title="Marque"),
-                y=alt.Y("Vehicules:Q", title="Véhicules uniques"),
-                tooltip=["Marque", "Vehicules"],
-            )
+        st.markdown("**Répartition par plateforme**")
+        st.dataframe(
+            df_sources.rename(
+                columns={
+                    "Premiere_collecte": "Début collecte",
+                    "Derniere_collecte": "Dernière maj",
+                }
+            ),
+            hide_index=True,
+            use_container_width=True,
         )
-        st.altair_chart(chart_top, use_container_width=True)
+    with col_d2:
+        st.markdown("**Répartition par motorisation**")
+        chart_en = (
+            alt.Chart(df_energies)
+            .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
+            .encode(
+                x=alt.X("Energie:N", sort="-y", title="Énergie"),
+                y=alt.Y("Annonces:Q", title="Annonces"),
+                color=alt.Color("Energie:N", legend=None),
+                tooltip=["Energie", "Annonces"],
+            )
+            .properties(height=240)
+        )
+        st.altair_chart(chart_en, use_container_width=True)
+    with col_d3:
+        st.markdown("**Répartition par boîte de vitesse**")
+        chart_boite = (
+            alt.Chart(df_boites)
+            .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
+            .encode(
+                x=alt.X("Boite:N", sort="-y", title="Boîte"),
+                y=alt.Y("Annonces:Q", title="Annonces"),
+                color=alt.Color("Boite:N", legend=None),
+                tooltip=["Boite", "Annonces"],
+            )
+            .properties(height=240)
+        )
+        st.altair_chart(chart_boite, use_container_width=True)
+
+    st.markdown("**Distribution des annonces par année de mise en circulation (2005 – 2026)**")
+    chart_annees = (
+        alt.Chart(df_annees)
+        .mark_bar()
+        .encode(
+            x=alt.X("Annee:O", title="Année"),
+            y=alt.Y("Annonces:Q", title="Nombre d'annonces"),
+            color=alt.Color("Source:N", title="Plateforme"),
+            tooltip=["Annee", "Source", "Annonces"],
+        )
+    )
+    st.altair_chart(chart_annees, use_container_width=True)
+
+    st.subheader("🏆 Top 30 des marques en base (par volume)")
+    chart_top = (
+        alt.Chart(df_top_marques)
+        .mark_bar()
+        .encode(
+            x=alt.X("Marque:N", sort="-y", title="Marque"),
+            y=alt.Y("Annonces:Q", title="Nombre d'annonces uniques"),
+            tooltip=["Marque", "Annonces"],
+        )
+    )
+    st.altair_chart(chart_top, use_container_width=True)
+
+with tab_liste:
+    nb_res = f"{len(df):,}".replace(",", " ")
+    st.subheader(f"Annonces comparables ({nb_res} résultats, triées par prix croissant)")
+    if not df.empty:
+        df_affichage = df.sort_values("prix", ascending=True).head(500)[
+            ["source", "marque", "modele", "annee", "kilometrage", "prix", "energie", "boite", "ville", "code_postal", "zone_atypique", "url_annonce"]
+        ]
+        st.dataframe(
+            df_affichage,
+            hide_index=True,
+            use_container_width=True,
+            column_config={
+                "source": "Source",
+                "marque": "Marque",
+                "modele": "Modèle",
+                "annee": st.column_config.NumberColumn("Année", format="%d"),
+                "kilometrage": st.column_config.NumberColumn("Kilométrage", format="%d km"),
+                "prix": st.column_config.NumberColumn("Prix", format="%d €"),
+                "energie": "Énergie",
+                "boite": "Boîte",
+                "ville": "Ville",
+                "code_postal": "CP",
+                "zone_atypique": "Zone atypique",
+                "url_annonce": st.column_config.LinkColumn("Lien annonce", display_text="Voir l'annonce"),
+            },
+        )
